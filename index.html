@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.6.2/chart.min.js"
+        integrity="sha512-tMabqarPtykgDtdtSqCL3uLVM0gS1ZkUAVhRFu1vSEFgvB73niFQWJuvviDyBGBH22Lcau4rHB5p2K2T0Xvr6Q=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+        let globalChartRef;
+        let shapeChart;
+        let graphChart;
+        window.addEventListener(
+            "DOMContentLoaded",
+            function () {
+                let line = document.getElementById("createGraph");
+                let shape = document.getElementById("createShape");
+                let deletePoint = document.getElementById("deletePoint");
+                let reset = document.getElementById("resetGraph");
+                let curveFit = document.getElementById("fitCurve");
+                let scaleMgmt = document.getElementById("scaleToggle");
+                scaleMgmt.addEventListener("click", scaleToggler);
+                curveFit.addEventListener("click", addParabola);
+                reset.addEventListener("click", resetGraph);
+                deletePoint.addEventListener("click", pointErase);
+                line.addEventListener("click", changeToGraph);
+                shape.addEventListener("click", changeToShape);
+                let ctxW = document.getElementById("chart-container1");
+                document.getElementById("fitCurve").style.display = "none";
+                ctxW.addEventListener("click", (e) => {
+                    clickButtonHandler(e);
+                });
+                createGraph();
+            },
+            false
+        );
+        /**
+         * variables and constants
+         */
+        var shapeStorage = [
+            {
+                x: 0,
+                y: 0,
+            },
+        ];
+        var storage = [
+            {
+                x: 0,
+                y: 0,
+            },
+        ];
+        let fillStatus = false; // area fill status
+        let typeStatus = "scatter"; //the type of graph: line or scatter
+        let tensionValue = 0; //tension of the line
+        let graphStatus = true; // button status
+        let x_max = 10;
+        let y_max = 10;
+        let y_max_neg = -6;
+        let pointStyleShape = "rectRot";
+        let fillColor = "rgb(78,112,190)"; //shape color
+        let customTitle = "Create your awesome graph";
+        let curveButtonCO = [
+            {
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+            },
+        ];
+        let curveButtonCON = [
+            {
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+            },
+        ];
+        let x_label = "total length swept";
+        let y_label = "total area swept";
+        let curve = false;
+        let curveN = false;
+        let curveArray = [];
+        let curveArrayN = [];
+        let curveButtonActiveColor = "#666";
+        let curveButtonActiveColor1 = "#666";
+        let y_max_scale = 0;
+        let y_max_scale_n = 0;
+        let curveBGC = "rgba(255,26,104,0.4)";
+        let fitCurveAllow = true;
+        //grid options
+        const DISPLAY = true;
+        const BORDER = true;
+        const CHART_AREA = true;
+        const TICKS = true;
+
+        /**
+         * quadratic regression
+         */
+        function quadReg(inputX, inputY, displayMain) {
+            let n =
+                inputX.length === inputY.length
+                    ? inputX.length
+                    : inputX.length >= inputY.length
+                        ? inputY.length
+                        : inputX.length;
+            let meanX = 0,
+                meanXSq = 0,
+                meanY = 0;
+            // means x,y, x2.
+            function x_bar(inputX) {
+                let total = 0,
+                    totalS = 0;
+                for (let i = 0; i < n; i++) {
+                    total += inputX[i];
+                    totalS += Math.pow(inputX[i], 2);
+                }
+                meanX = total / n;
+                meanXSq = totalS / n;
+            }
+            function y_bar(inputY) {
+                let total = 0;
+                for (let i = 0; i < n; i++) {
+                    total += inputY[i];
+                }
+                meanY = total / n;
+            }
+            x_bar(inputX);
+            y_bar(inputY);
+
+            //S parameters
+            function Sxx(inputX, meanX, n) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    sum += Math.pow(inputX[i], 2);
+                }
+                sum -= n * Math.pow(meanX, 2);
+                return sum;
+            }
+            function Sxy(inputX, inputY, n, meanX, meanY) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    sum += inputX[i] * inputY[i];
+                }
+                sum -= n * meanX * meanY;
+                return sum;
+            }
+            function Sxx2(inputX, meanX, meanXSq, n) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    sum += Math.pow(inputX[i], 3);
+                }
+                sum -= n * meanX * meanXSq;
+                return sum;
+            }
+            function Sx2x2(inputX, meanXSq, n) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    sum += Math.pow(inputX[i], 4);
+                }
+                sum -= n * meanXSq * meanXSq;
+                return sum;
+            }
+            function Sx2y(inputX, inputY, meanY, meanXSq, n) {
+                let sum = 0;
+                for (let i = 0; i < n; i++) {
+                    sum += Math.pow(inputX[i], 2) * inputY[i];
+                }
+                sum -= n * meanXSq * meanY;
+                return sum;
+            }
+            let sxx = Sxx(inputX, meanX, n),
+                sxy = Sxy(inputX, inputY, n, meanX, meanY),
+                sxx2 = Sxx2(inputX, meanX, meanXSq, n),
+                sx2x2 = Sx2x2(inputX, meanXSq, n),
+                sx2y = Sx2y(inputX, inputY, meanY, meanXSq, n);
+
+            //trendline
+            function B(sxx, sxy, sxx2, sx2x2, sx2y) {
+                let numB = 0;
+                numB =
+                    (sxy * sx2x2 - sx2y * sxx2) / (sxx * sx2x2 - Math.pow(sxx2, 2));
+                return numB;
+            }
+            let b = B(sxx, sxy, sxx2, sx2x2, sx2y);
+
+            function C(sxx, sxy, sxx2, sx2x2, sx2y) {
+                let numC = 0;
+                numC = (sx2y * sxx - sxy * sxx2) / (sxx * sx2x2 - Math.pow(sxx2, 2));
+
+                return numC;
+            }
+            let c = C(sxx, sxy, sxx2, sx2x2, sx2y);
+
+            function A(meanY, meanX, meanXSq, b, c) {
+                let numA = 0;
+                numA = meanY - b * meanX - c * meanXSq;
+                return numA;
+            }
+            let a = A(meanY, meanX, meanXSq, b, c);
+
+            //correlation
+            function correlationCoefficient(inputY, inputX, a, b, c, meanY, n) {
+                let numSum = 0;
+                let denSum = 0;
+                for (let i = 0; i < n; i++) {
+                    numSum += Math.pow(
+                        inputY[i] - a - b * inputX[i] - c * Math.pow(inputX[i], 2),
+                        2
+                    );
+                    denSum += Math.pow(inputY[i] - meanY, 2);
+                }
+                let _r = 0;
+                let r = 0;
+                _r += 1 - numSum / denSum;
+                r += Math.sqrt(_r);
+                return r;
+            }
+            let r = correlationCoefficient(inputY, inputX, a, b, c, meanY, n);
+            //roots
+            let x1 = 0;
+            let x2 = 0;
+            let complex = false;
+            function roots(a, b, c) {
+                if (Math.pow(b, 2) - 4 * a * c >= 0) {
+                    x1 = (Math.sqrt(Math.pow(b, 2) - 4 * a * c) - b) / (2 * c);
+                    x2 = (-Math.sqrt(Math.pow(b, 2) - 4 * a * c) - b) / (2 * c);
+                } else {
+                    x1 = (Math.sqrt(-Math.pow(b, 2) + 4 * a * c) - b) / (2 * c);
+                    x2 = (-Math.sqrt(-Math.pow(b, 2) + 4 * a * c) - b) / (2 * c);
+                    complex = true;
+                }
+            }
+            roots(a, b, c);
+
+            let correlationCoefficientS = "";
+            switch (true) {
+                case r >= 0.7:
+                    correlationCoefficientS = "Strong Correlation";
+                    break;
+                case r >= 0.4:
+                    correlationCoefficientS = "Moderate Correlation";
+                    break;
+                case r >= 0.2:
+                    correlationCoefficientS = "Weak Correlation";
+                    break;
+                default:
+                    correlationCoefficientS = "No Correlation";
+            }
+            if (displayMain === true) {
+                let iota = complex ? "i" : "";
+                const rootEq = `roots:${x1.toFixed(2)}${iota} and ${x2.toFixed(
+                    2
+                )}${iota} || y = ${c.toFixed(2)}·x²+(${b.toFixed(2)})·x+(${a.toFixed(
+                    2
+                )}) || Correlation Coefficient: ${r.toFixed(
+                    4
+                )} with ${correlationCoefficientS} <hr>`;
+                const rootHolder = document.getElementById("rootEquation");
+                let equation1 = document.createElement("span");
+                equation1.innerHTML = rootEq;
+                rootHolder.append(equation1);
+            }
+            let triangleStorage = [
+                {
+                    x: 0,
+                    y: 0,
+                },
+            ];
+            let step = (inputX[inputX.length - 1] - inputX[0]) / 10;
+            if (step > 0) {
+                for (let i = inputX[0]; i <= inputX[inputX.length - 1]; i += step) {
+                    let next = c * Math.pow(i, 2) + b * i + a;
+                    triangleStorage.push({
+                        x: i,
+                        y: next,
+                    });
+                }
+                triangleStorage.shift();
+            }
+            return [c, triangleStorage];
+        }
+        /**
+         * Canvas
+         */
+        function createGraph() {
+            /*
+          for creating button in canvas
+          */
+            let changeTension = {
+                id: "changeTension",
+                beforeDraw(globalChartRef, args, options) {
+                    const {
+                        ctx,
+                        chartArea: { top, bottom, left, right, width, height },
+                    } = globalChartRef;
+                    ctx.save();
+                    ctx.font = "14px Sans Serif";
+                    let text = "Quadratic";
+                    const textWidth = ctx.measureText(text).width;
+                    text = "Quadratic       ***for 3 points or more";
+                    //background color
+                    ctx.fillStyle = curveBGC;
+                    ctx.fillRect(left - 5, 0, textWidth + 15, 20);
+                    //stroke color
+                    ctx.strokeStyle = "rgba(255,26,104,1)";
+                    ctx.strokeRect(left - 5, 0, textWidth + 15, 20);
+                    //drawing time of text
+                    ctx.fillStyle = curveButtonActiveColor;
+                    ctx.textAlign = "left";
+                    ctx.fillText(text, left, 15);
+
+                    curveButtonCO[0].bottom = 25;
+                    curveButtonCO[0].top = 5;
+                    curveButtonCO[0].left = left - 10;
+                    curveButtonCO[0].right = left + textWidth + 10;
+                    ctx.restore();
+                },
+            };
+
+            var config = {
+                type: typeStatus,
+                data: {
+                    datasets: [
+                        {
+                            label: customTitle,
+                            data: storage,
+                            fill: fillStatus,
+                            showLine: graphStatus,
+                            tension: tensionValue,
+                            pointStyle: pointStyleShape,
+                            fillColor: "red",
+                        },
+                    ],
+                },
+                options: {
+                    plugins: {
+                        title: {
+                            // title
+                            display: true,
+                            text: "Playful Math",
+                        },
+                        legend: {
+                            display: false,
+                        },
+                    },
+                    tooltips: {
+                        mode: "index",
+                        intersect: false,
+                    },
+                    onHover: (e) => {
+                        const canvasPosition = Chart.helpers.getRelativePosition(
+                            e,
+                            globalChartRef
+                        );
+                        let dataX = globalChartRef.scales.x.getValueForPixel(
+                            canvasPosition.x
+                        );
+                        let dataY = globalChartRef.scales.y.getValueForPixel(
+                            canvasPosition.y
+                        );
+                        dataX = dataX.toFixed(1);
+                        dataY = dataY.toFixed(1);
+                        document.getElementById("xloc").innerHTML = `${dataX}`;
+                        document.getElementById("yloc").innerHTML = `${dataY}`;
+                    },
+                    onClick: (e) => {
+                        const canvasPosition = Chart.helpers.getRelativePosition(
+                            e,
+                            globalChartRef
+                        );
+                        let dataX = globalChartRef.scales.x.getValueForPixel(
+                            canvasPosition.x
+                        );
+                        let dataY = globalChartRef.scales.y.getValueForPixel(
+                            canvasPosition.y
+                        );
+                        dataX = parseFloat(dataX).toFixed(1);
+                        dataY = parseFloat(dataY).toFixed(1);
+                        last = storage[storage.length - 1];
+                        comparator = parseFloat(last.x);
+                        if (
+                            dataX >= comparator &&
+                            graphStatus === true &&
+                            fitCurveAllow
+                        ) {
+                            storage.push({
+                                x: dataX,
+                                y: dataY,
+                            });
+                            if (curveArray.length === 0) {
+                                curveArray.push(curve);
+                            }
+                            curveArray.push(curve);
+                        }
+                        globalChartRef.update();
+                    },
+                    scales: {
+                        x: {
+                            type: "linear",
+                            display: true,
+                            min: 0,
+                            suggestedMax: x_max,
+                            ticks: {
+                                display: true,
+                                stepsize: 1,
+                            },
+                            grid: {
+                                display: DISPLAY,
+                                drawBorder: BORDER,
+                                drawOnChartArea: CHART_AREA,
+                                drawTicks: TICKS,
+                            },
+                            title: {
+                                display: true,
+                                text: x_label,
+                                color: "#926",
+                                font: {
+                                    family: "Times",
+                                    size: 16,
+                                    weight: "",
+                                    lineHeight: 1,
+                                },
+                                padding: { top: 8, left: 0, right: 0, bottom: 0 },
+                            },
+                        },
+                        y: {
+                            display: true,
+                            suggestedMin: y_max_neg,
+                            suggestedMax: y_max,
+                            ticks: {
+                                stepsize: 1,
+                                display: true,
+                            },
+                            grid: {
+                                drawBorder: true,
+                                color: function (context) {
+                                    if (context.tick.value > 0) {
+                                        return "rgba(0,0,0,0.2)";
+                                    } else if (context.tick.value < 0) {
+                                        return "rgba(255,0,0,0.8)";
+                                    }
+                                    return "#000000";
+                                },
+                            },
+                            title: {
+                                display: true,
+                                text: y_label,
+                                color: "#926",
+                                font: {
+                                    family: "Times",
+                                    size: 16,
+                                    style: "normal",
+                                    lineHeight: 1.2,
+                                },
+                                padding: { top: 20, left: 0, right: 0, bottom: 0 },
+                            },
+                        },
+                    },
+                    responsive: true,
+                    maintainAspectRatio: true,
+                },
+                plugins: [changeTension],
+            };
+
+            config.data.datasets.forEach(function (dataset) {
+                //'rgb(93,236,199)';
+                dataset.borderColor = fillColor;
+                dataset.backgroundColor = fillColor;
+                dataset.pointBorderColor = "#000";
+                dataset.pointBackgroundColor = "#000";
+                dataset.pointRadius = 4;
+                dataset.pointBorderWidth = 1;
+                dataset.pointHoverRadius = 5;
+            });
+            document.getElementById("createGraph").disabled = graphStatus;
+            document.getElementById("createShape").disabled = !graphStatus;
+            document.getElementById("deletePoint").disabled = !graphStatus;
+            var ctx = document.getElementById("ChartCnvs").getContext("2d");
+            globalChartRef = new Chart(ctx, config);
+        }
+
+        /*
+        for sketching graphs
+        */
+
+        const changeToGraph = () => {
+            storage = [
+                {
+                    x: 0,
+                    y: 0,
+                },
+            ];
+            shapeStorage = [
+                {
+                    x: 0,
+                    y: 0,
+                },
+            ];
+            let storedInput = [];
+            if (localStorage.getItem("userInput")) {
+                storedInput = JSON.parse(localStorage.getItem("userInput"));
+            }
+            for (let i = 1; i < storedInput.length; i++) {
+                storage.push({
+                    x: parseFloat(storedInput[i].x),
+                    y: parseFloat(storedInput[i].y),
+                });
+            }
+            let storedInputCurve = [];
+            if (localStorage.getItem("quadratic")) {
+                storedInputCurve = JSON.parse(localStorage.getItem("quadratic"));
+            }
+            for (let i = 0; i < storedInputCurve.length; i++) {
+                curveArray.push(Boolean(storedInputCurve[i]));
+            }
+            fillStatus = false;
+            typeStatus = "scatter";
+            graphStatus = true;
+            y_max = x_max = 10;
+            y_max_neg = -6;
+            pointStyleShape = "rectRot";
+            x_label = "total length swept";
+            y_label = "total area swept";
+            document.getElementById("rootEquation").innerHTML = ``;
+            document.getElementById("fitCurve").disabled = !graphStatus;
+            document.querySelector(".showGraph").innerHTML = ``;
+            globalChartRef.destroy();
+            curveButtonActiveColor = "#666";
+            createGraph();
+        };
+
+        /*
+        for creating shapes
+        */
+        const changeToShape = () => {
+            document.getElementById("fitCurve").style.display = "block";
+
+            let triangleInput = undefined;
+            const record = [
+                {
+                    in: null,
+                    out: null,
+                },
+            ];
+            for (let i = 0; i < curveArray.length; i++) {
+                if (curveArray[i] === true) {
+                    let rand = record[record.length - 1];
+                    if (rand.in !== rand.out && rand.in != null) {
+                        record[record.length - 1].out = i;
+                    } else {
+                        record.push({
+                            in: i,
+                            out: null,
+                        });
+                    }
+                } else {
+                    record.push({
+                        in: i,
+                        out: i,
+                    });
+                }
+            }
+            let inputX = [];
+            let inputY = [];
+            for (let i = 0; i < storage.length; i++) {
+                inputX.push(parseFloat(storage[i].x));
+                inputY.push(parseFloat(storage[i].y));
+            }
+            const makeRect = (i, start) => {
+                if (start) {
+                    shapeStorage.push({
+                        x: storage[i - 1].x,
+                        y:
+                            (storage[i].y - storage[i - 1].y) /
+                            (storage[i].x - storage[i - 1].x),
+                    });
+                    shapeStorage.push({
+                        x: storage[i].x,
+                        y:
+                            (storage[i].y - storage[i - 1].y) /
+                            (storage[i].x - storage[i - 1].x),
+                    });
+                }
+            };
+            const makeTri = (start, end) => {
+                let add = 0;
+                if (start !== 0) {
+                    add = 1;
+                }
+                let begin = start - add;
+                let zX = [];
+                let zY = [];
+                for (let i = 0; i < inputX.length; i++) {
+                    zX[i] = inputX[i];
+                    zY[i] = inputY[i];
+                }
+                let X = zX.splice(begin, end - begin + 1);
+                let Y = zY.splice(begin, end - begin + 1);
+                if (X.length > 2) {
+                    let param = quadReg(X, Y, true);
+                    triangleInput = param[1];
+                    const areaTriangle =
+                        (2 * (storage[end].y - storage[begin].y)) /
+                        (storage[end].x - storage[begin].x);
+                    if (param[0] >= 0) {
+                        shapeStorage.push({
+                            x: storage[begin].x,
+                            y: 0,
+                        });
+                        shapeStorage.push({
+                            x: storage[end].x,
+                            y: areaTriangle,
+                        });
+                    } else {
+                        shapeStorage.push({
+                            x: storage[begin].x,
+                            y: areaTriangle,
+                        });
+                        shapeStorage.push({
+                            x: storage[end].x,
+                            y: 0,
+                        });
+                    }
+                } else {
+                    alert("Not enough points for a quadratic function");
+                    location.reload();
+                }
+            };
+            record.shift(); // removes the default null element
+            for (let i = 0; i < record.length; i++) {
+                if (record[i].in === record[i].out) {
+                    // console.log("Rectangle for index: " + record[i].in);
+                    makeRect(record[i].in, record[i].out);
+                } else {
+                    // console.log(
+                    //   "Triangle with points from: " + record[i].in + " to " + record[i].out
+                    // );
+                    makeTri(record[i].in, record[i].out);
+                }
+            }
+
+            localStorage.setItem("userInput", JSON.stringify(storage));
+            localStorage.setItem("quadratic", JSON.stringify(curveArray));
+            const splitCurve = curveArray;
+            curveArray = [];
+            globalChartRef.config.data.datasets[0].fill = true;
+            // document.getElementById("fitCurve").disabled = graphStatus;
+            const splitStorage = storage;
+            storage = shapeStorage;
+            fillStatus = {
+                target: "origin",
+                above: "rgba(78,112,190,1)",
+                below: "rgba(234,51,35,1)",
+            };
+            typeStatus = "scatter";
+            allowInput = true;
+            graphStatus = false;
+            tensionValue = 0;
+            fitCurveAllow = true;
+            pointStyleShape = "cross";
+            x_label = "length";
+            y_label = "width";
+            curveButtonActiveColor = "#666";
+            globalChartRef.destroy();
+            createGraph();
+            let configShape = {
+                type: "scatter",
+                data: {
+                    datasets: [],
+                },
+
+                options: {
+                    scales: {
+                        x: {
+                            type: "linear",
+                            display: true,
+                            min: 0,
+                            suggestedMax: x_max,
+                            ticks: {
+                                display: true,
+                                stepsize: 1,
+                            },
+                            grid: {
+                                display: DISPLAY,
+                                drawBorder: BORDER,
+                                drawOnChartArea: CHART_AREA,
+                                drawTicks: TICKS,
+                            },
+                            title: {
+                                display: true,
+                                text: "Length",
+                                color: "#926",
+                                font: {
+                                    family: "Times",
+                                    size: 16,
+                                    weight: "",
+                                    lineHeight: 1,
+                                },
+                                padding: { top: 8, left: 0, right: 0, bottom: 0 },
+                            },
+                        },
+                        y: {
+                            type: "linear",
+                            display: true,
+                            suggestedMin: 0,
+                            suggestedMax: y_max,
+                            ticks: {
+                                stepsize: 1,
+                                display: true,
+                            },
+                            grid: {
+                                drawBorder: true,
+                                color: function (context) {
+                                    if (context.tick.value > 0) {
+                                        return "rgba(0,0,0,0.2)";
+                                    } else if (context.tick.value < 0) {
+                                        return "rgba(255,0,0,0.8)";
+                                    }
+                                    return "#000000";
+                                },
+                            },
+                            title: {
+                                display: true,
+                                text: "Area",
+                                color: "#926",
+                                font: {
+                                    family: "Times",
+                                    size: 16,
+                                    style: "normal",
+                                    lineHeight: 1.2,
+                                },
+                                padding: { top: 20, left: 0, right: 0, bottom: 0 },
+                            },
+                        },
+                    },
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                    },
+                },
+            };
+            let configShape1 = {
+                type: "scatter",
+                data: {
+                    datasets: [
+                        {
+                            label: "User Output",
+                            data: shapeStorage,
+                            fill: {
+                                target: "origin",
+                                above: "rgba(78,112,190,1)",
+                                below: "rgba(234,51,35,1)",
+                            },
+                            showLine: false,
+                            tension: 0,
+                            pointStyle: "cross",
+                            fillColor: "red",
+                            borderColor: "blue",
+                        },
+                    ],
+                },
+
+                options: {
+                    scales: {
+                        x: {
+                            type: "linear",
+                            display: true,
+                            min: 0,
+                            suggestedMax: x_max,
+                            ticks: {
+                                display: true,
+                                stepsize: 1,
+                            },
+                            grid: {
+                                display: DISPLAY,
+                                drawBorder: BORDER,
+                                drawOnChartArea: CHART_AREA,
+                                drawTicks: TICKS,
+                            },
+                            title: {
+                                display: true,
+                                text: "Length",
+                                color: "#926",
+                                font: {
+                                    family: "Times",
+                                    size: 16,
+                                    weight: "",
+                                    lineHeight: 1,
+                                },
+                                padding: { top: 8, left: 0, right: 0, bottom: 0 },
+                            },
+                        },
+                        y: {
+                            type: "linear",
+                            display: true,
+                            suggestedMin: 0,
+                            suggestedMax: y_max,
+                            ticks: {
+                                stepsize: 1,
+                                display: true,
+                            },
+                            grid: {
+                                drawBorder: true,
+                                color: function (context) {
+                                    if (context.tick.value > 0) {
+                                        return "rgba(0,0,0,0.2)";
+                                    } else if (context.tick.value < 0) {
+                                        return "rgba(255,0,0,0.8)";
+                                    }
+                                    return "#000000";
+                                },
+                            },
+                            title: {
+                                display: true,
+                                text: "Width",
+                                color: "#926",
+                                font: {
+                                    family: "Times",
+                                    size: 16,
+                                    style: "normal",
+                                    lineHeight: 1.2,
+                                },
+                                padding: { top: 20, left: 0, right: 0, bottom: 0 },
+                            },
+                        },
+                    },
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                    },
+                },
+            };
+            configShape1.data.datasets.forEach(function (dataset) {
+                //'rgb(93,236,199)';
+                dataset.borderColor = fillColor;
+                dataset.backgroundColor = fillColor;
+                dataset.pointBorderColor = "#000";
+                dataset.pointBackgroundColor = "#000";
+                dataset.pointRadius = 4;
+                dataset.pointBorderWidth = 1;
+                dataset.pointHoverRadius = 5;
+            });
+            let shapeClass = document.querySelector(".showGraph");
+            let canvasShape1 = document.createElement("canvas");
+            let canvasShape2 = document.createElement("canvas");
+            canvasShape2.setAttribute("id", "ShapeCnvs1");
+            canvasShape1.setAttribute("id", "ShapeCnvs");
+            shapeClass.append(canvasShape1);
+            shapeClass.append(canvasShape2);
+            graphChart = new Chart(
+                document.getElementById("ShapeCnvs1").getContext("2d"),
+                configShape1
+            );
+            shapeChart = new Chart(
+                document.getElementById("ShapeCnvs").getContext("2d"),
+                configShape
+            );
+
+            let triangleInput1 = undefined;
+            let record1 = [
+                {
+                    in: null,
+                    out: null,
+                },
+            ];
+            for (let i = 0; i < splitCurve.length; i++) {
+                if (splitCurve[i] === true) {
+                    let rand = record1[record1.length - 1];
+                    if (rand.in !== rand.out && rand.in != null) {
+                        record1[record1.length - 1].out = i;
+                    } else {
+                        record1.push({
+                            in: i,
+                            out: null,
+                        });
+                    }
+                } else {
+                    record1.push({
+                        in: i,
+                        out: i,
+                    });
+                }
+            }
+            let inputX1 = [];
+            let inputY1 = [];
+            for (let i = 0; i < splitStorage.length; i++) {
+                inputX1.push(parseFloat(splitStorage[i].x));
+                inputY1.push(parseFloat(splitStorage[i].y));
+            }
+            for (let i = 0; i < splitCurve.length; i++)
+                if (i > 0 && splitCurve[i] === false) {
+                    shapeChart.config.data.datasets.push({
+                        label: "Linear",
+                        data: [
+                            {
+                                x: splitStorage[i - 1].x,
+                                y: splitStorage[i - 1].y,
+                            },
+                            {
+                                x: splitStorage[i].x,
+                                y: splitStorage[i].y,
+                            },
+                        ],
+                        showLine: true,
+                        pointRadius: 0,
+                        tension: 0,
+                        borderColor: "grey",
+                    });
+                    shapeChart.update();
+                }
+            // rectInput.push({
+            //   x: storage[i].x,
+            //   y: storage[i].y,
+            // });
+
+            const makeTri1 = (start, end) => {
+                let add = 0;
+                if (start !== 0) {
+                    add = 1;
+                }
+                let begin = start - add;
+                let zX = [];
+                let zY = [];
+                for (let i = 0; i < inputX1.length; i++) {
+                    zX[i] = inputX1[i];
+                    zY[i] = inputY1[i];
+                }
+                let X = zX.splice(begin, end - begin + 1);
+                let Y = zY.splice(begin, end - begin + 1);
+                if (X.length > 2) {
+                    let param = quadReg(X, Y, false);
+                    triangleInput1 = param[1];
+                    triangleInput1.unshift({
+                        x: splitStorage[begin].x,
+                        y: splitStorage[begin].y,
+                    });
+                    triangleInput1.push({
+                        x: splitStorage[end].x,
+                        y: splitStorage[end].y,
+                    });
+                }
+
+                if (triangleInput1 != undefined) {
+                    shapeChart.config.data.datasets.push({
+                        label: "Parabola",
+                        data: triangleInput1,
+                        showLine: true,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        borderColor: "grey",
+                    });
+                    console.log("trying");
+                    shapeChart.update();
+                }
+            };
+            record1.shift(); // removes the default null element record
+            for (let i = 0; i < record1.length; i++) {
+                if (record1[i].in !== record1[i].out) {
+                    makeTri1(record1[i].in, record1[i].out);
+                }
+            }
+            document.getElementById("ChartCnvs").style.display = "none";
+            document.querySelector(".shape-status").style.display = "none";
+            document.querySelector(".showGraph").style.display = "block";
+        };
+
+        /*
+        for making clickable area triangle
+        */
+        function clickButtonHandler(click) {
+            const x = click.offsetX;
+            const y = click.offsetY;
+            const left = curveButtonCO[0].left;
+            const right = curveButtonCO[0].right;
+            const top = curveButtonCO[0].top;
+            const bottom = curveButtonCO[0].bottom;
+            if (
+                x > left &&
+                x < right &&
+                y < bottom &&
+                y > top &&
+                curveN === false
+            ) {
+                curve = !curve;
+                if (curve === true) {
+                    curveButtonActiveColor = "#000";
+                    curveBGC = "rgba(255,255,0,0.4)";
+                    document.getElementById("drawingItem").innerHTML = "Quadratic";
+                } else {
+                    curveButtonActiveColor = "#666";
+                    curveBGC = "rgba(255,26,104,0.4)";
+                    document.getElementById("drawingItem").innerHTML = "Linear";
+                }
+                globalChartRef.update();
+            }
+            /* const leftN = curveButtonCON[0].left;
+                const rightN = curveButtonCON[0].right;
+                const topN = curveButtonCON[0].top;
+                const bottomN = curveButtonCON[0].bottom;
+                if (x > leftN && x < rightN && y < bottomN && y > topN && curve === false) {
+                    curveN = !curveN;
+                    if (curveN === true) {
+                        curveButtonActiveColor1 = "#000";
+                        document.getElementById("drawingItem").innerHTML = "Reversed-Triangle";
+                    } else {
+                        curveButtonActiveColor1 = "#666";
+                        document.getElementById("drawingItem").innerHTML = "Rectangle";
+                    }
+                    globalChartRef.update();
+                } */
+        }
+        //dynamic scales and titles
+        const addParabola = () => {
+            document.getElementById("fitCurve").style.display = "none";
+            document.getElementById("ChartCnvs").style.display = "block";
+            document.querySelector(".shape-status").style.display = "block";
+            document.getElementById("fitCurve").disabled = true;
+            document.querySelector(".showGraph").style.display = "none";
+        };
+        const addParabolaNot = () => {
+            document.getElementById("fitCurve").disabled = true;
+            document.getElementById("deletePoint").disabled = true;
+            globalChartRef.config.data.datasets[0].showLine = false;
+            globalChartRef.config.data.datasets[0].pointRadius = 0;
+            fitCurveAllow = false;
+            let triangleInput = undefined;
+            let rectInput = [];
+            const record = [
+                {
+                    in: null,
+                    out: null,
+                },
+            ];
+            for (let i = 0; i < curveArray.length; i++) {
+                if (curveArray[i] === true) {
+                    let rand = record[record.length - 1];
+                    if (rand.in !== rand.out && rand.in != null) {
+                        record[record.length - 1].out = i;
+                    } else {
+                        record.push({
+                            in: i,
+                            out: null,
+                        });
+                    }
+                } else {
+                    record.push({
+                        in: i,
+                        out: i,
+                    });
+                }
+            }
+            let inputX = [];
+            let inputY = [];
+            for (let i = 0; i < storage.length; i++) {
+                inputX.push(parseFloat(storage[i].x));
+                inputY.push(parseFloat(storage[i].y));
+            }
+            for (let i = 0; i < curveArray.length; i++)
+                if (i > 0 && curveArray[i] === false) {
+                    globalChartRef.config.data.datasets.push({
+                        label: "Linear",
+                        data: [
+                            {
+                                x: storage[i - 1].x,
+                                y: storage[i - 1].y,
+                            },
+                            {
+                                x: storage[i].x,
+                                y: storage[i].y,
+                            },
+                        ],
+                        showLine: true,
+                        pointRadius: 0,
+                        tension: 0,
+                        borderColor: "grey",
+                    });
+                    globalChartRef.update();
+                }
+            // rectInput.push({
+            //   x: storage[i].x,
+            //   y: storage[i].y,
+            // });
+
+            const makeTri = (start, end) => {
+                let add = 0;
+                if (start !== 0) {
+                    add = 1;
+                }
+                let begin = start - add;
+                let zX = [];
+                let zY = [];
+                for (let i = 0; i < inputX.length; i++) {
+                    zX[i] = inputX[i];
+                    zY[i] = inputY[i];
+                }
+                let X = zX.splice(begin, end - begin + 1);
+                let Y = zY.splice(begin, end - begin + 1);
+                if (X.length > 2) {
+                    let param = quadReg(X, Y, false);
+                    triangleInput = param[1];
+                    triangleInput.unshift({
+                        x: storage[begin].x,
+                        y: storage[begin].y,
+                    });
+                    triangleInput.push({
+                        x: storage[end].x,
+                        y: storage[end].y,
+                    });
+                }
+
+                if (triangleInput != undefined) {
+                    globalChartRef.config.data.datasets.push({
+                        label: "Parabola",
+                        data: triangleInput,
+                        showLine: true,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        borderColor: "grey",
+                    });
+                    globalChartRef.update();
+                }
+            };
+            record.shift(); // removes the default null element
+            for (let i = 0; i < record.length; i++) {
+                if (record[i].in !== record[i].out) {
+                    // console.log("Rectangle for index: " + record[i].in);
+                    makeTri(record[i].in, record[i].out);
+                }
+            }
+
+            // if (triangleInput != undefined) {
+            //   console.log("Inserting another dataset");
+            //   globalChartRef.config.data.datasets.push({
+            //     label: "Curve-1",
+            //     data: triangleInput,
+            //     showLine: true,
+            //     pointRadius: 0,
+            //     tension: 0.4,
+            //     borderColor: "yellow",
+            //   });
+            //   globalChartRef.update();
+            // }
+        };
+
+        const pointErase = () => {
+            storage.pop();
+            curveArray.pop();
+            if (storage.length === 0) {
+                storage.push({
+                    x: 0,
+                    y: 0,
+                });
+            }
+            globalChartRef.update();
+        };
+        const resetGraph = () => {
+            localStorage.clear();
+            document.getElementById("rootEquation").innerHTML = "";
+            location.reload();
+            changeToGraph();
+        };
+        function updateChartx(x) {
+            x_max = x.value;
+            globalChartRef.config.options.scales["x"].suggestedMax = x_max;
+            globalChartRef.update();
+        }
+        function updateCharty(y) {
+            y_max = y.value;
+            globalChartRef.config.options.scales["y"].suggestedMax = y_max;
+            globalChartRef.update();
+        }
+        function updateChartyn(yn) {
+            y_max_neg = yn.value;
+            globalChartRef.config.options.scales["y"].suggestedMin = y_max_neg;
+            globalChartRef.update();
+        }
+        function updateTitle(title) {
+            customTitle = title.value;
+            globalChartRef.config.data.datasets[0].label = customTitle;
+            globalChartRef.update();
+        }
+        function scaleToggler() {
+            let x = document.querySelector(".scales");
+            if (x.style.display === "none") {
+                x.style.display = "block";
+            } else {
+                x.style.display = "none";
+            }
+        }
+      /*
+          reverse triangle from input points
+          else if (curveArrayN[i - 1] === true) {
+                            shapeStorage.push({
+                                x: storage[i - 1].x,
+                                y: areaOfTriangle,
+                            });
+                            shapeStorage.push({
+                                x: lengthOfShape,
+                                y: 0,
+                            });
+                        }
+          */
+    </script>
+    <style>
+        .chart-container {
+            width: 100%;
+            height: auto;
+            margin: auto;
+            border-style: double;
+            margin-top: 1em;
+        }
+
+        .showGraph {
+            width: 50%;
+            height: auto;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            align-items: center;
+            margin-left: 25%;
+        }
+
+        .shape-status {
+            text-align: center;
+            color: brown;
+        }
+
+        h3 {
+            text-align: center;
+            justify-content: center;
+            flex: auto;
+            flex-direction: row;
+        }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous" />
+    <title>Input Graph</title>
+</head>
+
+<body>
+    <div class="chart-container" id="chart-container1">
+        <div class="input-group mb-3">
+            <div class="input-group-prepend">
+                <button class="btn btn-success" type="button" id="createGraph">
+                    Sketch Graph
+                </button>
+            </div>
+            <div class="input-group-prepend">
+                <button class="btn btn-warning" type="button" id="scaleToggle">
+                    Scale
+                </button>
+            </div>
+            <div class="input-group-prepend">
+                <button class="btn btn-danger" type="button" id="resetGraph">
+                    Reset Graph
+                </button>
+            </div>
+            <input type="text" maxlength="40" onkeyup="updateTitle(this)" id="graph-title" class="form-control"
+                placeholder="Have a delightful name for your graph? Place it here." aria-label=""
+                aria-describedby="basic-addon1" />
+            <div class="input-group-append">
+                <button class="btn btn-info" type="button" id="fitCurve" value="delete">
+                    Show Shape
+                </button>
+            </div>
+            <div class="input-group-append">
+                <button class="btn btn-warning" type="button" id="deletePoint" value="delete">
+                    Erase Last Point
+                </button>
+            </div>
+            <div class="input-group-append">
+                <button class="btn btn-primary" type="button" id="createShape">
+                    Create Shape
+                </button>
+            </div>
+        </div>
+        <canvas id="ChartCnvs" width="2" height="1"></canvas>
+
+        <hr />
+        <div class="shape-status">
+            <p>
+                Currently Drawing: <span id="drawingItem">Linear</span> || Cursor
+                position -> (x,y):(<span id="xloc">0</span>,<span id="yloc">0</span>)
+            </p>
+            <p id="rootEquation"></p>
+        </div>
+        <div class="scales" style="display: none">
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="basic-addon1">Here you can change your positive X Axes
+                        scale</span>
+                </div>
+                <input class="form-control" placeholder="Have another figure length limit in mind?" aria-label="x"
+                    aria-describedby="basic-addon1" onkeyup="updateChartx(this)" id="x_max" type="number" min="0"
+                    max="50" />
+                <div class="input-group-append">
+                    <span class="input-group-text">Default is 10</span>
+                </div>
+            </div>
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="basic-addon1">Here you can change your positive Y Axes
+                        scale</span>
+                </div>
+                <input class="form-control" placeholder="Have another figure area limit in mind?" aria-label="y"
+                    aria-describedby="basic-addon1" onkeyup="updateCharty(this)" id="y_max" type="number" min="0"
+                    max="50" />
+                <div class="input-group-append">
+                    <span class="input-group-text">Default is 10</span>
+                </div>
+            </div>
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="basic-addon1">Here you can change your negative Y Axes
+                        scale</span>
+                </div>
+                <input class="form-control" placeholder="Have another negative figure area limit in mind?"
+                    aria-label="y" aria-describedby="basic-addon1" onkeyup="updateChartyn(this)" id="y_max_neg"
+                    type="number" max="0" min="-50" />
+                <div class="input-group-append">
+                    <span class="input-group-text">Default is -6</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<div class="showGraph"></div>
+
+</html>
